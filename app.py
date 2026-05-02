@@ -8,11 +8,10 @@ from openai import OpenAI
 from google import genai
 import streamlit.components.v1 as components
 
-# --- 1. 基本設定（APIキーはStreamlitのシークレット機能で安全に読み込む） ---
+# --- 1. 基本設定 ---
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 
-# クラウドサーバー上の保存先（同じフォルダ内）
 SAVE_DIR = "temp_data"
 BG_IMAGE_PATH = "artist.png"
 
@@ -22,9 +21,15 @@ if not os.path.exists(SAVE_DIR):
 client_oa = OpenAI(api_key=OPENAI_API_KEY)
 client_ge = genai.Client(api_key=GEMINI_API_KEY)
 
-# --- 2. ユーティリティ ---
+# --- 2. ユーティリティ (403対策済み) ---
 def get_video_info(url):
-    ydl_opts = {'quiet': True}
+    # ブラウザからのアクセスに見せかけるオプション
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'nocheckcertificate': True,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+    }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
         return info.get('title', 'Unknown Title'), info.get('id')
@@ -60,7 +65,7 @@ st.title("✨ Music Translation Port")
 history_file = os.path.join(SAVE_DIR, "history.json")
 try:
     history = json.load(open(history_file, "r")) if os.path.exists(history_file) else {}
-except json.JSONDecodeError:
+except (json.JSONDecodeError, FileNotFoundError):
     history = {}
 
 def save_history():
@@ -78,7 +83,13 @@ if st.button("日本語の字幕をつくる ✨"):
             with st.status("翻訳中..."):
                 try:
                     title, _ = get_video_info(url)
-                    ydl_opts = {'format': 'bestaudio/best', 'outtmpl': f'{SAVE_DIR}/{vid}.%(ext)s'}
+                    # ダウンロード時もブラウザを装う
+                    ydl_opts = {
+                        'format': 'bestaudio/best',
+                        'outtmpl': f'{SAVE_DIR}/{vid}.%(ext)s',
+                        'nocheckcertificate': True,
+                        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+                    }
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl: ydl.download([url])
                     
                     audio_path = f"{SAVE_DIR}/{vid}.webm"
@@ -97,7 +108,7 @@ if st.button("日本語の字幕をつくる ✨"):
                 except Exception as e:
                     st.error(f"エラー: {e}")
 
-# --- 6. 履歴・表示（3:1 カラムレイアウト） ---
+# --- 6. 履歴・表示 ---
 st.markdown("---")
 for vid, data in reversed(list(history.items())):
     col_main, col_del = st.columns([0.96, 0.04])
