@@ -1,4 +1,3 @@
 streamlit
-yt-dlp
 openai
-google-genai
+yt-dlp
